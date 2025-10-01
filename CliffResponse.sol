@@ -1,25 +1,16 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-/// @title CliffResponse
-/// @notice Small response contract: Drosera operators call this when the trap triggers.
 contract CliffResponse {
-    event CliffTriggered(
-        address vestingContract,
-        address beneficiary,
-        uint256 cliffTimestamp,
-        uint256 currentTime,
-        bool triggered,
-        address reporter
-    );
+    mapping(address => bool) public flaggedContracts;
+    event ContractFlagged(address indexed vestingContract, uint256 unlockTime);
 
-    function respondWithCliff(
-        address vestingContract,
-        address beneficiary,
-        uint256 cliffTimestamp,
-        uint256 currentTime,
-        bool triggered
-    ) external {
-        emit CliffTriggered(vestingContract, beneficiary, cliffTimestamp, currentTime, triggered, msg.sender);
+    function respondToCliff(address vestingContract, uint256 unlockTime) external {
+        flaggedContracts[vestingContract] = true;
+        emit ContractFlagged(vestingContract, unlockTime);
+    }
+
+    function isFlagged(address vestingContract) external view returns (bool) {
+        return flaggedContracts[vestingContract];
     }
 }
