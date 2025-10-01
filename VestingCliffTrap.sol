@@ -3,94 +3,44 @@ pragma solidity ^0.8.20;
 
 import {ITrap} from "drosera-contracts/interfaces/ITrap.sol";
 
-interface IVesting {
-    function cliff() external view returns (uint256);
-    function beneficiary() external view returns (address);
+interface ICliffResponse {
+    function respondToCliff(address vestingContract, uint256 unlockTime) external;
 }
 
 contract VestingCliffTrap is ITrap {
-    address public owner;
-
-    // monitored vesting contract
     address public vestingContract;
-
-    // cached values (used by collect)
     uint256 public cliffTimestamp;
-    address public beneficiary;
+    address public responseContract;
 
-    event ConfigSet(address indexed setter, address vestingContract, uint256 cliffTimestamp, address beneficiary);
-    event CliffDetected(address vestingContract, address beneficiary, uint256 cliffTimestamp, uint256 currentTime);
+    event CliffTriggered(address indexed vesting, uint256 unlockTime, uint256 timestamp);
 
-    constructor() {
-        owner = msg.sender;
+    constructor(address _vestingContract, uint256 _cliffTimestamp, address _responseContract) {
+        vestingContract = _vestingContract;
+        cliffTimestamp = _cliffTimestamp;
+        responseContract = _responseContract;
     }
 
-    modifier onlyOwner() {
-        require(msg.sender == owner, "only owner");
-        _;
+    /// Collect data (Drosera-compatible)
+    function collect() external view override returns (bytes memory) {
+        bool cliffPassed = block.timestamp >= cliffTimestamp;
+        return abi.encode(cliffPassed, vestingContract, cliffTimestamp);
     }
 
-    /// @notice Owner sets the vesting contract to watch. This reads cliff() & beneficiary() if available.
-    function setVestingContract(address _vesting) external onlyOwner {
-        vestingContract = _vesting;
-        // try read cliff & beneficiary
-        try IVesting(_vesting).cliff() returns (uint256 c) {
-            cliffTimestamp = c;
-        } catch {
-            cliffTimestamp = 0;
-        }
-        try IVesting(_vesting).beneficiary() returns (address b) {
-            beneficiary = b;
-        } catch {
-            beneficiary = address(0);
-        }
-        emit ConfigSet(msg.sender, vestingContract, cliffTimestamp, beneficiary);
-    }
-
-    // --- CollectOutput ---
-    struct CollectOutput {
-        address vestingContract;
-        uint256 cliffTimestamp;
-        uint256 currentTime;
-        address beneficiary;
-    }
-
-    /// @notice collect current vesting info (called by operators every block)
-    function collect() external view returns (bytes memory) {
-        uint256 c = cliffTimestamp;
-        address b = beneficiary;
-
-        if (vestingContract != address(0)) {
-            try IVesting(vestingContract).cliff() returns (uint256 c2) {
-                c = c2;
-            } catch {}
-            try IVesting(vestingContract).beneficiary() returns (address b2) {
-                b = b2;
-            } catch {}
-        }
-
-        CollectOutput memory out = CollectOutput({
-            vestingContract: vestingContract,
-            cliffTimestamp: c,
-            currentTime: block.timestamp,
-            beneficiary: b
-        });
-
-        return abi.encode(out);
-    }
-
-    /// @notice shouldRespond: returns true when cliff has been reached (currentTime >= cliff)
-    /// @dev Drosera will pass an array of collected samples; we read latest (data[0]).
+    /// Decide if response is needed
     function shouldRespond(bytes[] calldata data) external pure override returns (bool, bytes memory) {
-        if (data.length == 0) return (false, "");
+        (bool cliffPassed, address vesting, uint256 unlockTime) = abi.decode(data[0], (bool, address, uint256));
+        if (cliffPassed) {
+            return (true, abi.encode(vesting, unlockTime));
+        }
+        return (false, "");
+    }
 
-        CollectOutput memory latest = abi.decode(data[0], (CollectOutput));
+    /// Drosera operators will trigger this
+    function executeResponse(address vesting, uint256 unlockTime) external {
+        require(block.timestamp >= unlockTime, "Cliff not reached");
+        emit CliffTriggered(vesting, unlockTime, block.timestamp);
 
-        bool triggered = (latest.cliffTimestamp > 0 && latest.currentTime >= latest.cliffTimestamp);
-
-        // response payload: vestingContract, beneficiary, cliffTimestamp, currentTime, triggered
-        bytes memory resp = abi.encode(latest.vestingContract, latest.beneficiary, latest.cliffTimestamp, latest.currentTime, triggered);
-
-        return (triggered, resp);
+        // Call the response contract
+        ICliffResponse(responseContract).respondToCliff(vesting, unlockTime);
     }
 }
