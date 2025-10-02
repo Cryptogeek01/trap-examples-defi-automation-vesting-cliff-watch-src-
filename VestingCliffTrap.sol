@@ -20,6 +20,14 @@ contract VestingCliffTrap is ITrap {
     /// Collect data (Drosera-compatible)
     function collect() external view override returns (bytes memory) {
         (address vestingContract, uint256 cliffTimestamp, ) = IVestingCliffConfig(configContract).getConfig(address(this));
+
+        //Validate configuration
+        if(vestingContract == address(0) || responseContract == address(0)) {
+           return abi.encode(false, address(0), 0);
+        }
+
+        //Read cliff timestamp from vesting contract
+        uint256 cliffTimestamp = IVesting(vestingContract).cliff();
         bool cliffPassed = block.timestamp >= cliffTimestamp;
         return abi.encode(cliffPassed, vestingContract, cliffTimestamp);
     }
@@ -28,6 +36,7 @@ contract VestingCliffTrap is ITrap {
     function shouldRespond(bytes[] calldata data) external pure override returns (bool, bytes memory) {
         (bool cliffPassed, address vesting, uint256 unlockTime) = abi.decode(data[0], (bool, address, uint256));
         if (data.length == 0) {
+           emit InvalidInput("Emoty data array");
            return (false, address(0),"");
         }
 
@@ -35,10 +44,16 @@ contract VestingCliffTrap is ITrap {
         (bool cliffpassed, address vesting, uint256 unlockTime) = abi.decode(data[0], (bool, address, uint256));
         (, , address responseContract) = IVestingCliffConfig(configContract).getConfig(address(this));
 
+       // Validate decoded data and configuration
+        if (vesting == address(0) || responseContract == address(0)) {
+            emit InvalidInput("Invalid vesting or response contract");
+            return (false, address(0), "");
+        }
+
         if (cliffPassed) {
             return (true, abi.encode(vesting, unlockTime));
         }
         return (false, address(0), "");
     }
-  
+   event InvalidInput(string reason);
 }
