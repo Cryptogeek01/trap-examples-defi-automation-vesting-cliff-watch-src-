@@ -7,21 +7,23 @@ interface ICliffResponse {
     function respondToCliff(address vestingContract, uint256 unlockTime) external;
 }
 
+interface IVestingCliffConfig {
+    function getConfig(address trap) external view returns (address, uint256, address);
+}
+
 contract VestingCliffTrap is ITrap {
-    address public vestingContract;
-    uint256 public cliffTimestamp;
-    address public responseContract;
+    address public configContract; // Address of the storage contract
 
     event CliffTriggered(address indexed vesting, uint256 unlockTime, uint256 timestamp);
 
-    constructor(address _vestingContract, uint256 _cliffTimestamp, address _responseContract) {
-        vestingContract = _vestingContract;
-        cliffTimestamp = _cliffTimestamp;
-        responseContract = _responseContract;
+    constructor(address _configContract) {
+        require(_configContract != address(0), "Invalid config contract");
+        configContract = _configContract;
     }
 
     /// Collect data (Drosera-compatible)
     function collect() external view override returns (bytes memory) {
+        (address vestingContract, uint256 cliffTimestamp, ) = IVestingCliffConfig(configContract).getConfig(address(this));
         bool cliffPassed = block.timestamp >= cliffTimestamp;
         return abi.encode(cliffPassed, vestingContract, cliffTimestamp);
     }
@@ -37,7 +39,9 @@ contract VestingCliffTrap is ITrap {
 
     /// Drosera operators will trigger this
     function executeResponse(address vesting, uint256 unlockTime) external {
+        (, uint256 cliffTimestamp, address responseContract) = IVestingCliffConfig(configContract).getConfig(address(this));
         require(block.timestamp >= unlockTime, "Cliff not reached");
+        require(unlockTime == cliffTimestamp, "Invalid unlock time");
         emit CliffTriggered(vesting, unlockTime, block.timestamp);
 
         // Call the response contract
