@@ -3,10 +3,6 @@ pragma solidity ^0.8.20;
 
 import {ITrap} from "drosera-contracts/interfaces/ITrap.sol";
 
-interface ICliffResponse {
-    function respondToCliff(address vestingContract, uint256 unlockTime) external;
-}
-
 interface IVestingCliffConfig {
     function getConfig(address trap) external view returns (address, uint256, address);
 }
@@ -34,17 +30,7 @@ contract VestingCliffTrap is ITrap {
         if (cliffPassed) {
             return (true, abi.encode(vesting, unlockTime));
         }
-        return (false, "");
+        return (false, address(0), "");
     }
-
-    /// Drosera operators will trigger this
-    function executeResponse(address vesting, uint256 unlockTime) external {
-        (, uint256 cliffTimestamp, address responseContract) = IVestingCliffConfig(configContract).getConfig(address(this));
-        require(block.timestamp >= unlockTime, "Cliff not reached");
-        require(unlockTime == cliffTimestamp, "Invalid unlock time");
-        emit CliffTriggered(vesting, unlockTime, block.timestamp);
-
-        // Call the response contract
-        ICliffResponse(responseContract).respondToCliff(vesting, unlockTime);
-    }
+  
 }
