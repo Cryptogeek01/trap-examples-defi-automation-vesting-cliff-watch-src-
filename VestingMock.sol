@@ -7,19 +7,19 @@ contract VestingMock {
     uint256 private _cliff;
     address private _beneficiary;
 
-    event CliffSet(uint256 _cliff);
-    event BeneficiarySet(address _beneficiary);
+    event CliffSet(uint256 cliff);
+    event BeneficiarySet(address beneficiary);
 
     constructor(uint256 cliff_, address beneficiary_) {
-        _cliff = cliff__;
+        _cliff = cliff_;
         _beneficiary = beneficiary_;
     }
 
-    function _cliff() external view returns (uint256) {
+    function cliff() external view returns (uint256) {
         return _cliff;
     }
 
-    function _beneficiary() external view returns (address) {
+    function beneficiary() external view returns (address) {
         return _beneficiary;
     }
 
