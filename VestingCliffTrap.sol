@@ -8,21 +8,25 @@ interface IVestingCliffConfig {
 }
 
 contract VestingCliffTrap is ITrap {
-    address public configContract; // Address of the storage contract
+    address public immutable configContract; // Address of the storage contract
 
     event CliffTriggered(address indexed vesting, uint256 unlockTime, uint256 timestamp);
 
-    constructor(address _configContract) {
-        require(_configContract != address(0), "Invalid config contract");
+    function setConfigContract(address _configConttract) external{
+          require(_configContract != address(0), "Invalid config contract");
         configContract = _configContract;
-    }
+   }
 
     /// Collect data (Drosera-compatible)
     function collect() external view override returns (bytes memory) {
         (address vestingContract, uint256 cliffTimestamp, ) = IVestingCliffConfig(configContract).getConfig(address(this));
 
         //Validate configuration
+       (bool cliffpassed, address vesting, uint256 unlockTime) = abi.decode(data[0], (bool, address, uint256));
+        (, , address responseContract) = IVestingCliffConfig(configContract).getConfig(address(this));
+
         if(vestingContract == address(0) || responseContract == address(0)) {
+             emit InvalidInput("Invalid vesting or response contract");
            return abi.encode(false, address(0), 0);
         }
 
@@ -33,27 +37,18 @@ contract VestingCliffTrap is ITrap {
     }
 
     /// Decide if response is needed
-    function shouldRespond(bytes[] calldata data) external pure override returns (bool, bytes memory) {
-        (bool cliffPassed, address vesting, uint256 unlockTime) = abi.decode(data[0], (bool, address, uint256));
-        if (data.length == 0) {
-           emit InvalidInput("Emoty data array");
-           return (false, address(0),"");
-        }
-
-     //Decode data[0] safely
-        (bool cliffpassed, address vesting, uint256 unlockTime) = abi.decode(data[0], (bool, address, uint256));
-        (, , address responseContract) = IVestingCliffConfig(configContract).getConfig(address(this));
-
-       // Validate decoded data and configuration
-        if (vesting == address(0) || responseContract == address(0)) {
-            emit InvalidInput("Invalid vesting or response contract");
-            return (false, address(0), "");
-        }
-
-        if (cliffPassed) {
-            return (true, abi.encode(vesting, unlockTime));
-        }
-        return (false, address(0), "");
+  function shouldRespond(bytes[] calldata data) external pure override returns (bool, bytes memory) {
+    if (data.length == 0) {
+        return (false, bytes(""));
     }
-   event InvalidInput(string reason);
+
+    (bool cliffPassed, address vesting, uint256 unlockTime) = abi.decode(data[0], (bool, address, uint256));
+
+    if (!cliffPassed || vesting == address(0)) {
+        return (false, bytes(""));
+    }
+
+    return (true, abi.encode(vesting, unlockTime));
+}
+
 }
