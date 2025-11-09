@@ -21,13 +21,9 @@ contract CliffResponse is Ownable {
     }
 
     function respondToCliff(address vestingContract, uint256 unlockTime) external onlyAllowed {
-        if (block.timestamp < unlockTime) {
+        if (vestingContract == address(0) || block.timestamp < unlockTime) {
             emit ResponseFailed(vestingContract, unlockTime, "Cliff not reached");
-            revert("Cliff not reached");
-        }
-        if (vestingContract == address(0)) {
-            emit ResponseFailed(vestingContract, unlockTime, "Invalid vesting contract");
-            revert("Invalid vesting contract");
+            return;
         }
 
         emit CliffTriggered(vestingContract, unlockTime, block.timestamp);
