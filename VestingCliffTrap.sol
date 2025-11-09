@@ -3,6 +3,10 @@ pragma solidity ^0.8.20;
 
 import {ITrap} from "drosera-contracts/interfaces/ITrap.sol";
 
+interface IVesting {
+ function cliff() external view returns(uint256);
+}
+
 interface IVestingCliffConfig {
     function getConfig(address trap) external view returns (address, uint256, address);
 }
